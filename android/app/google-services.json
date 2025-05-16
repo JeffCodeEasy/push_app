@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "946806169240",
+    "firebase_url": "https://swift-handler-224720.firebaseio.com",
+    "project_id": "swift-handler-224720",
+    "storage_bucket": "swift-handler-224720.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:946806169240:android:8adb16d1cf7ace11f23aed",
+        "android_client_info": {
+          "package_name": "com.jeremyfernandez.push_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDTlCKa_YWvctaQ0fvPs9dAw47k4xF1ae4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
