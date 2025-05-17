@@ -1,14 +1,17 @@
 // import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:push_app/config/local_notifications/local_notifications.dart';
+import 'package:push_app/domain/entities/push_message.dart';
 
 import 'package:push_app/firebase_options.dart';
 
 part 'notifications_event.dart';
 part 'notifications_state.dart';
-
 
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // If you're going to use other Firebase services in the background, such as Firestore,
@@ -18,17 +21,26 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   print("Handling a background message: ${message.messageId}");
 }
 
-
-
 class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
   FirebaseMessaging messaging = FirebaseMessaging.instance;
+  int pushNumberId = 0;
 
-  NotificationsBloc() : super(const NotificationsState()) {
+  final Future<void> Function()? requestLocalNotificationPermissions;
+  final void Function({
+    required int id,
+    String? title,
+    String? body,
+    String? data,
+  })? showLocalNotification;
+
+  NotificationsBloc({this.requestLocalNotificationPermissions, this.showLocalNotification,})
+    : super(const NotificationsState()) {
     on<NotificationStatusChanged>(_notificationStatusChanged);
+    on<NotificationReceived>(_onPushMessageReceived);
 
     // Verificar estado de las notificaciones
     _initialStatusCheck();
-    
+
     // Listener para notificaciones en Foreground
     _onForegroundMessage();
   }
@@ -48,6 +60,17 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     _getFCMToken();
   }
 
+  void _onPushMessageReceived(
+    NotificationReceived event,
+    Emitter<NotificationsState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        notifications: [event.pushMessage, ...state.notifications],
+      ),
+    );
+  }
+
   void _initialStatusCheck() async {
     final settings = await messaging.getNotificationSettings();
     add(NotificationStatusChanged(settings.authorizationStatus));
@@ -61,17 +84,37 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
     print(token);
   }
 
-  void _handleRemoteMessage(RemoteMessage message) {
-    print('Got a message whilst in the foreground!');
-    print('Message data: ${message.data}');
-
+  void handleRemoteMessage(RemoteMessage message) {
     if (message.notification == null) return;
 
-    print('Message also contained a notification: ${message.notification}');
+    final notification = PushMessage(
+      messageId:
+          message.messageId?.replaceAll(':', '').replaceAll('%', '') ?? '',
+      title: message.notification!.title ?? '',
+      body: message.notification!.body ?? '',
+      sentDate: message.sentTime ?? DateTime.now(),
+      data: message.data,
+      imageUrl:
+          Platform.isAndroid
+              ? message.notification!.android?.imageUrl
+              : message.notification!.apple?.imageUrl,
+    );
+
+    if (showLocalNotification != null) {
+      showLocalNotification!(
+        id: ++pushNumberId,
+        body: notification.body,
+        data: notification.messageId,
+        title: notification.title,
+      ); 
+    }
+
+    // print(notification.toString());
+    add(NotificationReceived(notification));
   }
 
   void _onForegroundMessage() {
-    FirebaseMessaging.onMessage.listen(_handleRemoteMessage);
+    FirebaseMessaging.onMessage.listen(handleRemoteMessage);
   }
 
   void requestPermission() async {
@@ -85,6 +128,23 @@ class NotificationsBloc extends Bloc<NotificationsEvent, NotificationsState> {
       sound: true,
     );
 
+    // Solicitar permisos de local notifications
+    if (requestLocalNotificationPermissions != null) {
+      await requestLocalNotificationPermissions!();
+      // await LocalNotifications.requestPermissionLocalNotifications();
+    }
+
     add(NotificationStatusChanged(settings.authorizationStatus));
+  }
+
+  PushMessage? getMessageById(String pushMessageId) {
+    final exist = state.notifications.any(
+      (element) => element.messageId == pushMessageId,
+    );
+    if (!exist) return null;
+
+    return state.notifications.firstWhere(
+      (element) => element.messageId == pushMessageId,
+    );
   }
 }
